@@ -1,0 +1,9 @@
+[submodule "libs/manifold"]
+	path = libs/manifold
+	url = ../../elalish/manifold
+[submodule "libs/glm"]
+	path = libs/glm
+	url = ../../g-truc/glm
+[submodule "libs/Clipper2"]
+	path = libs/Clipper2
+	url = ../../AngusJohnson/Clipper2
