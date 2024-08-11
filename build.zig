@@ -106,7 +106,7 @@ pub fn build(b: *std.Build) void {
     if (options.manifold_export) manifoldc.addCSourceFiles(.{
         .files = &.{
             "libs/manifold/bindings/c/manifoldc.cpp",
-            "libs/manifold/meshIO/src/meshIO.cpp"
+            "libs/manifold/meshIO/src/meshIO.cpp",
         },
         .flags = &.{ "-std=c++17", "-DMANIFOLD_EXPORT" },
     });
@@ -121,5 +121,7 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(tests);
     tests.root_module.addImport("zmanifold_options", options_module);
+    tests.addIncludePath(b.path("libs/manifold/bindings/c/include"));
+    tests.linkLibrary(manifoldc);
     test_step.dependOn(&b.addRunArtifact(tests).step);
 }
