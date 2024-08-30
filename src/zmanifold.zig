@@ -88,6 +88,10 @@ pub const Manifold = opaque {
 
     //----- INFO GETTERS -----------------------------------------------------------------------------//
 
+    pub fn isEmpty(self: *Manifold) bool {
+        return c.manifold_is_empty(@as(?*c.ManifoldManifold, @ptrCast(self))) != 0;
+    }
+
     pub fn getNumVerts(self: *Manifold) i32 {
         return c.manifold_num_vert(@as(?*c.ManifoldManifold, @ptrCast(self)));
     }
