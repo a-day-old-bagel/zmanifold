@@ -110,6 +110,16 @@ pub const MeshGL = opaque {
         alloc.free(many_ptr[0..c.manifold_meshgl_size()]);
     }
 
+    pub fn getNumProps(self: *MeshGL) i32 {
+        return c.manifold_meshgl_num_prop(@as(*c.ManifoldMeshGL, @ptrCast(self)));
+    }
+    pub fn getNumVerts(self: *MeshGL) i32 {
+        return c.manifold_meshgl_num_vert(@as(*c.ManifoldMeshGL, @ptrCast(self)));
+    }
+    pub fn getNumTris(self: *MeshGL) i32 {
+        return c.manifold_meshgl_num_tri(@as(*c.ManifoldMeshGL, @ptrCast(self)));
+    }
+
     pub fn getVertPropertiesLength(self: *MeshGL) usize {
         return c.manifold_meshgl_vert_properties_length(@as(*c.ManifoldMeshGL, @ptrCast(self)));
     }
