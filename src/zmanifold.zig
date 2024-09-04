@@ -66,6 +66,14 @@ pub const Manifold = opaque {
         return @as(*Manifold, @ptrCast(c.manifold_trim_by_plane(mem.ptr, original, nx, ny, nz, offset)));
     }
 
+    //----- TRANSFORMATIONS --------------------------------------------------------------------------//
+
+    pub fn rotate(self: *Manifold, alloc: Alloc, x: f32, y: f32, z: f32) !*Manifold {
+        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const original = @as(?*c.ManifoldManifold, @ptrCast(self));
+        return @as(*Manifold, @ptrCast(c.manifold_rotate(mem.ptr, original, x, y, z)));
+    }
+
     //----- MESH EXTRACTION --------------------------------------------------------------------------//
 
     pub const VertFunc = fn (?*f32, c.ManifoldVec3, ?*const f32, ?*anyopaque) callconv(.C) void;
