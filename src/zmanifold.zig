@@ -86,6 +86,11 @@ pub const Manifold = opaque {
         return @as(*MeshGL, @ptrCast(c.manifold_get_meshgl(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(self)))));
     }
 
+    pub fn project(self: *Manifold, alloc: Alloc) !*Polygons {
+        const mem = try alloc.alloc(u8, c.manifold_polygons_size());
+        return @as(*Polygons, @ptrCast(c.manifold_project(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(self)))));
+    }
+
     //----- INFO GETTERS -----------------------------------------------------------------------------//
 
     pub fn isEmpty(self: *Manifold) bool {
@@ -136,6 +141,71 @@ pub const MeshGL = opaque {
         const num_uints = self.getTriangleVertIndicesLength();
         const mem = try alloc.alloc(u32, num_uints);
         return c.manifold_meshgl_tri_verts(mem.ptr, @as(*c.ManifoldMeshGL, @ptrCast(self)))[0..num_uints];
+    }
+};
+
+//----------------------------------------------------------------------------------------------------------
+//
+// Polygon
+//
+//----------------------------------------------------------------------------------------------------------
+
+pub const Polygons = opaque {
+    pub fn deinit(self: *Polygons, alloc: Alloc) void {
+        c.manifold_destruct_polygons(@as(?*c.ManifoldPolygons, @ptrCast(self)));
+        const many_ptr = @as([*]u8, @ptrCast(self));
+        alloc.free(many_ptr[0..c.manifold_polygons_size()]);
+    }
+
+    pub fn getNumSimplePolygons(self: *Polygons) usize {
+        return c.manifold_polygons_length(@as(?*c.ManifoldPolygons, @ptrCast(self)));
+    }
+
+    pub fn getSimplePolygonNumPoints(self: *Polygons, simple_idx: i32) usize {
+        return c.manifold_polygons_simple_length(@as(?*c.ManifoldPolygons, @ptrCast(self)), simple_idx);
+    }
+
+    pub fn getPoint(self: *Polygons, simple_idx: i32, point_idx: i32) [2]f32 {
+        const vec2 = c.manifold_polygons_get_point(@as(?*c.ManifoldPolygons, @ptrCast(self)), simple_idx, point_idx);
+        return .{vec2.x, vec2.y};
+    }
+};
+
+//----------------------------------------------------------------------------------------------------------
+//
+// CrossSection
+//
+//----------------------------------------------------------------------------------------------------------
+
+pub const CrossSection = opaque {
+
+    pub const FillRule = enum {
+        even_odd,
+        non_zero,
+        positive,
+        negative,
+    };
+
+    pub fn deinit(self: *CrossSection, alloc: Alloc) void {
+        c.manifold_destruct_cross_section(@as(?*c.ManifoldCrossSection, @ptrCast(self)));
+        const many_ptr = @as([*]u8, @ptrCast(self));
+        alloc.free(many_ptr[0..c.manifold_cross_section_size()]);
+    }
+
+    pub fn fromPolygons(alloc: Alloc, polygons: *Polygons, fill_rule: FillRule) !*CrossSection {
+        const mem = try alloc.alloc(u8, c.manifold_cross_section_size());
+        return @as(*CrossSection, @ptrCast(c.manifold_cross_section_of_polygons(
+            mem.ptr,
+            @as(?*c.ManifoldPolygons, @ptrCast(polygons)),
+            @intFromEnum(fill_rule),
+        )));
+    }
+    pub fn toPolygons(self: *CrossSection, alloc: Alloc) !*Polygons {
+        const mem = try alloc.alloc(u8, c.manifold_polygons_size());
+        return @as(*Polygons, @ptrCast(c.manifold_cross_section_to_polygons(
+            mem.ptr,
+            @as(?*c.ManifoldCrossSection, @ptrCast(self)),
+        )));
     }
 };
 
