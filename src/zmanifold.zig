@@ -215,6 +215,12 @@ pub const CrossSection = opaque {
             @as(?*c.ManifoldCrossSection, @ptrCast(self)),
         )));
     }
+
+    pub fn simplify(self: *CrossSection, alloc: Alloc, epsilon: f64) !*CrossSection {
+        const mem = try alloc.alloc(u8, c.manifold_cross_section_size());
+        const original = @as(?*c.ManifoldCrossSection, @ptrCast(self));
+        return @as(*CrossSection, @ptrCast(c.manifold_cross_section_simplify(mem.ptr, original, epsilon)));
+    }
 };
 
 //----------------------------------------------------------------------------------------------------------
