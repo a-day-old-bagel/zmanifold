@@ -40,7 +40,7 @@ pub const Manifold = opaque {
         return @as(*Manifold, @ptrCast(c.manifold_tetrahedron(mem.ptr)));
     }
 
-    pub fn initCube(alloc: Alloc, x: f32, y: f32, z: f32, center: bool) !*Manifold {
+    pub fn initCube(alloc: Alloc, x: f64, y: f64, z: f64, center: bool) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_cube(mem.ptr, x, y, z, if (center) 1 else 0)));
     }
@@ -60,7 +60,7 @@ pub const Manifold = opaque {
         return @as(*Manifold, @ptrCast(c.manifold_boolean(mem.ptr, first, second, @intFromEnum(operation))));
     }
 
-    pub fn trimByPlane(self: *Manifold, alloc: Alloc, nx: f32, ny: f32, nz: f32, offset: f32) !*Manifold {
+    pub fn trimByPlane(self: *Manifold, alloc: Alloc, nx: f64, ny: f64, nz: f64, offset: f64) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
         return @as(*Manifold, @ptrCast(c.manifold_trim_by_plane(mem.ptr, original, nx, ny, nz, offset)));
@@ -76,7 +76,7 @@ pub const Manifold = opaque {
 
     //----- MESH EXTRACTION --------------------------------------------------------------------------//
 
-    pub const VertFunc = fn (?*f32, c.ManifoldVec3, ?*const f32, ?*anyopaque) callconv(.C) void;
+    pub const VertFunc = fn (?*f64, c.ManifoldVec3, ?*const f64, ?*anyopaque) callconv(.C) void;
     pub fn setVertProperties(self: *Manifold, alloc: Alloc, num_prop: i32, fun: VertFunc, ctx: ?*anyopaque) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
@@ -173,7 +173,7 @@ pub const Polygons = opaque {
         return c.manifold_polygons_simple_length(@as(?*c.ManifoldPolygons, @ptrCast(self)), simple_idx);
     }
 
-    pub fn getPoint(self: *Polygons, simple_idx: i32, point_idx: i32) [2]f32 {
+    pub fn getPoint(self: *Polygons, simple_idx: i32, point_idx: i32) [2]f64 {
         const vec2 = c.manifold_polygons_get_point(@as(?*c.ManifoldPolygons, @ptrCast(self)), simple_idx, point_idx);
         return .{vec2.x, vec2.y};
     }
