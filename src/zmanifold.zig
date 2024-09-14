@@ -13,6 +13,21 @@ pub const BooleanOperation = enum {
     intersect,
 };
 
+pub const ManifoldStatus = enum {
+    no_error,
+    non_finite_vertex,
+    not_manifold,
+    vertex_index_out_of_bounds,
+    properties_wrong_length,
+    missing_position_properties,
+    merge_vectors_different_lengths,
+    merge_index_out_of_bounds,
+    transform_wrong_length,
+    run_index_wrong_length,
+    face_id_wrong_length,
+    invalid_construction,
+};
+
 pub const Vec3 = c.ManifoldVec3;
 
 //----------------------------------------------------------------------------------------------------------
@@ -109,6 +124,10 @@ pub const Manifold = opaque {
 
     pub fn isEmpty(self: *Manifold) bool {
         return c.manifold_is_empty(@as(?*c.ManifoldManifold, @ptrCast(self))) != 0;
+    }
+
+    pub fn status(self: *Manifold) ManifoldStatus {
+        return @enumFromInt(c.manifold_status(@as(?*c.ManifoldManifold, @ptrCast(self))));
     }
 
     pub fn getNumVerts(self: *Manifold) i32 {
