@@ -45,7 +45,7 @@ pub const Manifold = opaque {
         return @as(*Manifold, @ptrCast(c.manifold_empty(mem.ptr)));
     }
 
-    pub fn initCopy(alloc: Alloc, original: *Manifold) !*Manifold {
+    pub fn initCopy(original: *Manifold, alloc: Alloc) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_copy(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(original)))));
     }
@@ -132,6 +132,13 @@ pub const Manifold = opaque {
 
     pub fn getNumVerts(self: *Manifold) i32 {
         return c.manifold_num_vert(@as(?*c.ManifoldManifold, @ptrCast(self)));
+    }
+
+    //----- MISC -------------------------------------------------------------------------------------//
+
+    pub fn asOriginal(self: *Manifold, alloc: Alloc) !*Manifold {
+        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        return @as(*Manifold, @ptrCast(c.manifold_as_original(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(self)))));
     }
 };
 
