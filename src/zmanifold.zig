@@ -89,13 +89,13 @@ pub const Manifold = opaque {
 
     //----- TRANSFORMATIONS --------------------------------------------------------------------------//
 
-    pub fn rotate(self: *Manifold, alloc: Alloc, x: f32, y: f32, z: f32) !*Manifold {
+    pub fn rotate(self: *Manifold, alloc: Alloc, x: f64, y: f64, z: f64) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
         return @as(*Manifold, @ptrCast(c.manifold_rotate(mem.ptr, original, x, y, z)));
     }
 
-    pub fn translate(self: *Manifold, alloc: Alloc, x: f32, y: f32, z: f32) !*Manifold {
+    pub fn translate(self: *Manifold, alloc: Alloc, x: f64, y: f64, z: f64) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
         return @as(*Manifold, @ptrCast(c.manifold_translate(mem.ptr, original, x, y, z)));
