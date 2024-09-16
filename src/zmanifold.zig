@@ -50,6 +50,14 @@ pub const Manifold = opaque {
         return @as(*Manifold, @ptrCast(c.manifold_copy(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(original)))));
     }
 
+    pub fn deinit(self: *Manifold, alloc: Alloc) void {
+        c.manifold_destruct_manifold(@as(?*c.ManifoldManifold, @ptrCast(self)));
+        const many_ptr = @as([*]u8, @ptrCast(self));
+        alloc.free(many_ptr[0..c.manifold_manifold_size()]);
+    }
+
+    //----- SHAPES -----------------------------------------------------------------------------------//
+
     pub fn initTetrahedron(alloc: Alloc) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_tetrahedron(mem.ptr)));
@@ -60,10 +68,11 @@ pub const Manifold = opaque {
         return @as(*Manifold, @ptrCast(c.manifold_cube(mem.ptr, x, y, z, if (center) 1 else 0)));
     }
 
-    pub fn deinit(self: *Manifold, alloc: Alloc) void {
-        c.manifold_destruct_manifold(@as(?*c.ManifoldManifold, @ptrCast(self)));
-        const many_ptr = @as([*]u8, @ptrCast(self));
-        alloc.free(many_ptr[0..c.manifold_manifold_size()]);
+    pub fn initCylinder(alloc: Alloc, height: f64, rad_lo: f64, rad_hi: f64, segments: i32, center: bool) !*Manifold {
+        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        return @as(*Manifold, @ptrCast(
+            c.manifold_cylinder(mem.ptr, height, rad_lo, rad_hi, segments, if (center) 1 else 0),
+        ));
     }
 
     //----- BOOLEAN OPERATIONS -----------------------------------------------------------------------//
