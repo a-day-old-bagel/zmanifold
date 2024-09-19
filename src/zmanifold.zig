@@ -98,6 +98,12 @@ pub const Manifold = opaque {
 
     //----- TRANSFORMATIONS --------------------------------------------------------------------------//
 
+    pub fn scale(self: *Manifold, alloc: Alloc, x: f64, y: f64, z: f64) !*Manifold {
+        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const original = @as(?*c.ManifoldManifold, @ptrCast(self));
+        return @as(*Manifold, @ptrCast(c.manifold_scale(mem.ptr, original, x, y, z)));
+    }
+
     pub fn rotate(self: *Manifold, alloc: Alloc, x: f64, y: f64, z: f64) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
