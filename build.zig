@@ -10,6 +10,11 @@ pub fn build(b: *std.Build) void {
             "manifold_export",
             "Compile with MeshIO",
         ) orelse false,
+        .manifold_parallel = b.option(
+            bool,
+            "manifold_parallel",
+            "Compile with multithreading support using TBB",
+        ) orelse false,
     };
 
     const options_step = b.addOptions();
@@ -59,6 +64,7 @@ pub fn build(b: *std.Build) void {
 
     manifoldc.addIncludePath(b.path("libs/glm"));
     manifoldc.addIncludePath(b.path("libs/Clipper2/CPP/Clipper2Lib/include"));
+    if (options.manifold_parallel) manifoldc.addIncludePath(b.path("libs/oneTBB/include"));
     manifoldc.addIncludePath(b.path("libs/manifold/bindings/c"));
     manifoldc.addIncludePath(b.path("libs/manifold/bindings/c/include"));
     manifoldc.addIncludePath(b.path("libs/manifold/src/collider/include"));
@@ -101,14 +107,53 @@ pub fn build(b: *std.Build) void {
         .flags = &.{
             "-std=c++17",
             if (options.manifold_export) "-DMANIFOLD_EXPORT" else "",
+            if (options.manifold_parallel) "-DMANIFOLD_PAR='T'" else "",
+            if (options.manifold_parallel) "-DTBB_USE_DEBUG=0" else "",
         },
     });
     if (options.manifold_export) manifoldc.addCSourceFiles(.{
         .files = &.{
-            "libs/manifold/bindings/c/manifoldc.cpp",
             "libs/manifold/meshIO/src/meshIO.cpp",
         },
         .flags = &.{ "-std=c++17", "-DMANIFOLD_EXPORT" },
+    });
+    if (options.manifold_parallel) manifoldc.addCSourceFiles(.{
+        .files = &.{
+            "libs/oneTBB/src/tbb/address_waiter.cpp",
+            "libs/oneTBB/src/tbb/allocator.cpp",
+            "libs/oneTBB/src/tbb/arena.cpp",
+            "libs/oneTBB/src/tbb/arena_slot.cpp",
+            "libs/oneTBB/src/tbb/concurrent_bounded_queue.cpp",
+            "libs/oneTBB/src/tbb/dynamic_link.cpp",
+            "libs/oneTBB/src/tbb/exception.cpp",
+            "libs/oneTBB/src/tbb/global_control.cpp",
+            "libs/oneTBB/src/tbb/governor.cpp",
+            "libs/oneTBB/src/tbb/itt_notify.cpp",
+            "libs/oneTBB/src/tbb/main.cpp",
+            "libs/oneTBB/src/tbb/market.cpp",
+            "libs/oneTBB/src/tbb/misc.cpp",
+            "libs/oneTBB/src/tbb/misc_ex.cpp",
+            "libs/oneTBB/src/tbb/observer_proxy.cpp",
+            "libs/oneTBB/src/tbb/parallel_pipeline.cpp",
+            "libs/oneTBB/src/tbb/private_server.cpp",
+            "libs/oneTBB/src/tbb/profiling.cpp",
+            "libs/oneTBB/src/tbb/queuing_rw_mutex.cpp",
+            "libs/oneTBB/src/tbb/rml_tbb.cpp",
+            "libs/oneTBB/src/tbb/rtm_mutex.cpp",
+            "libs/oneTBB/src/tbb/rtm_rw_mutex.cpp",
+            "libs/oneTBB/src/tbb/semaphore.cpp",
+            "libs/oneTBB/src/tbb/small_object_pool.cpp",
+            "libs/oneTBB/src/tbb/task.cpp",
+            "libs/oneTBB/src/tbb/task_dispatcher.cpp",
+            "libs/oneTBB/src/tbb/task_group_context.cpp",
+            "libs/oneTBB/src/tbb/tbb.rc",
+            "libs/oneTBB/src/tbb/tcm_adaptor.cpp",
+            "libs/oneTBB/src/tbb/thread_dispatcher.cpp",
+            "libs/oneTBB/src/tbb/thread_request_serializer.cpp",
+            "libs/oneTBB/src/tbb/threading_control.cpp",
+            "libs/oneTBB/src/tbb/version.cpp",
+        },
+        .flags = &.{ "-std=c++17", "-DTBB_USE_DEBUG=0" },
     });
 
     const test_step = b.step("test", "Run zmanifold tests");

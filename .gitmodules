@@ -7,3 +7,6 @@
 [submodule "libs/Clipper2"]
 	path = libs/Clipper2
 	url = ../../AngusJohnson/Clipper2
+[submodule "libs/oneTBB"]
+	path = libs/oneTBB
+	url = ../../oneapi-src/oneTBB
