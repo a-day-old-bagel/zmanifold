@@ -52,6 +52,7 @@ pub fn build(b: *std.Build) void {
         },
         .flags = &.{
             "-std=c++17",
+            "-fno-exceptions",
         },
     });
 
@@ -106,6 +107,7 @@ pub fn build(b: *std.Build) void {
         },
         .flags = &.{
             "-std=c++17",
+            "-fno-exceptions",
             if (options.manifold_export) "-DMANIFOLD_EXPORT" else "",
             if (options.manifold_parallel) "-DMANIFOLD_PAR='T'" else "",
             if (options.manifold_parallel) "-DTBB_USE_DEBUG=0" else "",
@@ -115,7 +117,7 @@ pub fn build(b: *std.Build) void {
         .files = &.{
             "libs/manifold/meshIO/src/meshIO.cpp",
         },
-        .flags = &.{ "-std=c++17", "-DMANIFOLD_EXPORT" },
+        .flags = &.{ "-std=c++17", "-fno-exceptions", "-DMANIFOLD_EXPORT" },
     });
     if (options.manifold_parallel) manifoldc.addCSourceFiles(.{
         .files = &.{
@@ -153,7 +155,7 @@ pub fn build(b: *std.Build) void {
             "libs/oneTBB/src/tbb/threading_control.cpp",
             "libs/oneTBB/src/tbb/version.cpp",
         },
-        .flags = &.{ "-std=c++17", "-DTBB_USE_DEBUG=0" },
+        .flags = &.{ "-std=c++17", "-fno-exceptions", "-DTBB_USE_DEBUG=0" },
     });
 
     const test_step = b.step("test", "Run zmanifold tests");
