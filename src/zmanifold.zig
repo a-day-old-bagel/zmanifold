@@ -3,8 +3,8 @@ const Alloc = std.mem.Allocator;
 const options = @import("zmanifold_options");
 const c = @cImport({
     if (options.manifold_export) @cDefine("MANIFOLD_EXPORT", "");
-    @cInclude("manifoldc.h");
-    @cInclude("types.h");
+    @cInclude("manifold/manifoldc.h");
+    @cInclude("manifold/types.h");
 });
 
 pub const BooleanOperation = enum {
@@ -125,7 +125,7 @@ pub const Manifold = opaque {
         return @as(*Manifold, @ptrCast(c.manifold_set_properties(mem.ptr, original, num_prop, fun, ctx)));
     }
 
-    pub fn calculateNormals(self: *Manifold, alloc: Alloc, normal_idx: i32, min_sharp_angle: i32) !*Manifold {
+    pub fn calculateNormals(self: *Manifold, alloc: Alloc, normal_idx: i32, min_sharp_angle: f64) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
         return @as(*Manifold, @ptrCast(c.manifold_calculate_normals(mem.ptr, original, normal_idx, min_sharp_angle)));
@@ -151,7 +151,7 @@ pub const Manifold = opaque {
         return @enumFromInt(c.manifold_status(@as(?*c.ManifoldManifold, @ptrCast(self))));
     }
 
-    pub fn getNumVerts(self: *Manifold) i32 {
+    pub fn getNumVerts(self: *Manifold) usize {
         return c.manifold_num_vert(@as(?*c.ManifoldManifold, @ptrCast(self)));
     }
 
@@ -194,13 +194,13 @@ pub const ManifoldVec = opaque {
         return c.manifold_manifold_vec_length(@as(?*c.ManifoldManifoldVec, @ptrCast(self)));
     }
 
-    pub fn get(self: *ManifoldVec, alloc: Alloc, index: i32) !*Manifold {
+    pub fn get(self: *ManifoldVec, alloc: Alloc, index: usize) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         const mani = c.manifold_manifold_vec_get(mem.ptr, @as(?*c.ManifoldManifoldVec, @ptrCast(self)), index);
         return @as(*Manifold, @ptrCast(mani));
     }
 
-    pub fn set(self: *ManifoldVec, index: i32, manifold: *Manifold) void {
+    pub fn set(self: *ManifoldVec, index: usize, manifold: *Manifold) void {
         c.manifold_manifold_vec_set(
             @as(?*c.ManifoldManifoldVec, @ptrCast(self)),
             index,
@@ -275,11 +275,11 @@ pub const Polygons = opaque {
         return c.manifold_polygons_length(@as(?*c.ManifoldPolygons, @ptrCast(self)));
     }
 
-    pub fn getSimplePolygonNumPoints(self: *Polygons, simple_idx: i32) usize {
+    pub fn getSimplePolygonNumPoints(self: *Polygons, simple_idx: usize) usize {
         return c.manifold_polygons_simple_length(@as(?*c.ManifoldPolygons, @ptrCast(self)), simple_idx);
     }
 
-    pub fn getPoint(self: *Polygons, simple_idx: i32, point_idx: i32) [2]f64 {
+    pub fn getPoint(self: *Polygons, simple_idx: usize, point_idx: usize) [2]f64 {
         const vec2 = c.manifold_polygons_get_point(@as(?*c.ManifoldPolygons, @ptrCast(self)), simple_idx, point_idx);
         return .{ vec2.x, vec2.y };
     }
