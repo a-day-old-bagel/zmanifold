@@ -7,12 +7,14 @@ const c = @cImport({
     @cInclude("manifold/types.h");
 });
 
+// Maps to ManifoldOpType
 pub const BooleanOperation = enum {
     add,
     subtract,
     intersect,
 };
 
+// Maps to ManifoldError
 pub const ManifoldStatus = enum {
     no_error,
     non_finite_vertex,
@@ -26,6 +28,7 @@ pub const ManifoldStatus = enum {
     run_index_wrong_length,
     face_id_wrong_length,
     invalid_construction,
+    result_too_large,
 };
 
 pub const Vec3 = c.ManifoldVec3;
@@ -292,11 +295,19 @@ pub const Polygons = opaque {
 //----------------------------------------------------------------------------------------------------------
 
 pub const CrossSection = opaque {
+    // Maps to ManifoldFillRule
     pub const FillRule = enum {
         even_odd,
         non_zero,
         positive,
         negative,
+    };
+    // Maps to ManifoldJoinType
+    pub const JoinType = enum {
+        square,
+        round,
+        miter,
+        bevel,
     };
 
     pub fn deinit(self: *CrossSection, alloc: Alloc) void {
