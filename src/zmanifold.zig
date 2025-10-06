@@ -53,6 +53,11 @@ pub const Manifold = opaque {
         return @as(*Manifold, @ptrCast(c.manifold_copy(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(original)))));
     }
 
+    pub fn initFromMeshGL(alloc: Alloc, mesh_gl: *MeshGL) !*Manifold {
+        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        return @as(*Manifold, @ptrCast(c.manifold_of_meshgl(mem.ptr, @as(?*c.ManifoldMeshGL, @ptrCast(mesh_gl)))));
+    }
+
     pub fn deinit(self: *Manifold, alloc: Alloc) void {
         c.manifold_destruct_manifold(@as(?*c.ManifoldManifold, @ptrCast(self)));
         const many_ptr = @as([*]u8, @ptrCast(self));
@@ -226,10 +231,27 @@ pub const ManifoldVec = opaque {
 //----------------------------------------------------------------------------------------------------------
 
 pub const MeshGL = opaque {
+
+    pub fn init(alloc: Alloc, vert_props: [*]f32, n_verts: usize, n_props: usize, indices: []u32) !*MeshGL {
+        const mem = try alloc.alloc(u8, c.manifold_meshgl_size());
+        return @as(*MeshGL, @ptrCast(c.manifold_meshgl(
+            mem.ptr,
+            vert_props,
+            n_verts,
+            n_props,
+            indices.ptr,
+            indices.len / 3,
+        )));
+    }
     pub fn deinit(self: *MeshGL, alloc: Alloc) void {
         c.manifold_destruct_meshgl(@as(?*c.ManifoldMeshGL, @ptrCast(self)));
         const many_ptr = @as([*]u8, @ptrCast(self));
         alloc.free(many_ptr[0..c.manifold_meshgl_size()]);
+    }
+
+    pub fn merge(self: *MeshGL, alloc: Alloc) !*MeshGL {
+        const mem = try alloc.alloc(u8, c.manifold_meshgl_size());
+        return @as(*MeshGL, @ptrCast(c.manifold_meshgl_merge(mem.ptr, @as(?*c.ManifoldMeshGL, @ptrCast(self)))));
     }
 
     pub fn getNumProps(self: *MeshGL) i32 {
