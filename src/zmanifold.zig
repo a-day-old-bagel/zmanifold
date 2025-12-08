@@ -31,6 +31,7 @@ pub const ManifoldStatus = enum {
     result_too_large,
 };
 
+pub const Vec2 = c.ManifoldVec2;
 pub const Vec3 = c.ManifoldVec3;
 
 //----------------------------------------------------------------------------------------------------------
@@ -41,11 +42,15 @@ pub const Vec3 = c.ManifoldVec3;
 
 pub const Manifold = opaque {
 
-    //----- INIT/DEINIT ------------------------------------------------------------------------------//
-
     pub fn initEmpty(alloc: Alloc) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_empty(mem.ptr)));
+    }
+
+    pub fn deinit(self: *Manifold, alloc: Alloc) void {
+        c.manifold_destruct_manifold(@as(?*c.ManifoldManifold, @ptrCast(self)));
+        const many_ptr = @as([*]u8, @ptrCast(self));
+        alloc.free(many_ptr[0..c.manifold_manifold_size()]);
     }
 
     pub fn initCopy(original: *Manifold, alloc: Alloc) !*Manifold {
@@ -56,12 +61,6 @@ pub const Manifold = opaque {
     pub fn initFromMeshGL(alloc: Alloc, mesh_gl: *MeshGL) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_of_meshgl(mem.ptr, @as(?*c.ManifoldMeshGL, @ptrCast(mesh_gl)))));
-    }
-
-    pub fn deinit(self: *Manifold, alloc: Alloc) void {
-        c.manifold_destruct_manifold(@as(?*c.ManifoldManifold, @ptrCast(self)));
-        const many_ptr = @as([*]u8, @ptrCast(self));
-        alloc.free(many_ptr[0..c.manifold_manifold_size()]);
     }
 
     //----- SHAPES -----------------------------------------------------------------------------------//
@@ -81,6 +80,20 @@ pub const Manifold = opaque {
         return @as(*Manifold, @ptrCast(
             c.manifold_cylinder(mem.ptr, height, rad_lo, rad_hi, segments, if (center) 1 else 0),
         ));
+    }
+
+    //----- POLYGONS: 2D<-->3D -----------------------------------------------------------------------//
+
+    pub fn initRevolution(alloc: Alloc, polygons: *Polygons, segments: i32, degrees: f64) !*Manifold {
+        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        return @as(*Manifold, @ptrCast(
+            c.manifold_revolve(mem.ptr, @as(?*c.ManifoldPolygons, @ptrCast(polygons)), segments, degrees)
+        ));
+    }
+
+    pub fn project(self: *Manifold, alloc: Alloc) !*Polygons {
+        const mem = try alloc.alloc(u8, c.manifold_polygons_size());
+        return @as(*Polygons, @ptrCast(c.manifold_project(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(self)))));
     }
 
     //----- BOOLEAN OPERATIONS -----------------------------------------------------------------------//
@@ -142,11 +155,6 @@ pub const Manifold = opaque {
     pub fn getMeshGL(self: *Manifold, alloc: Alloc) !*MeshGL {
         const mem = try alloc.alloc(u8, c.manifold_meshgl_size());
         return @as(*MeshGL, @ptrCast(c.manifold_get_meshgl(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(self)))));
-    }
-
-    pub fn project(self: *Manifold, alloc: Alloc) !*Polygons {
-        const mem = try alloc.alloc(u8, c.manifold_polygons_size());
-        return @as(*Polygons, @ptrCast(c.manifold_project(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(self)))));
     }
 
     //----- INFO GETTERS -----------------------------------------------------------------------------//
@@ -285,11 +293,18 @@ pub const MeshGL = opaque {
 
 //----------------------------------------------------------------------------------------------------------
 //
-// Polygon
+// Polygons
 //
 //----------------------------------------------------------------------------------------------------------
 
 pub const Polygons = opaque {
+    pub fn initFromSimples(alloc: Alloc, polys: []const *SimplePolygon) !*Polygons {
+        const mem = try alloc.alloc(u8, c.manifold_polygons_size());
+        return @as(*Polygons, @ptrCast(
+            c.manifold_polygons(mem.ptr, @as(?*?*c.ManifoldSimplePolygon, @ptrCast(@constCast(polys.ptr))), polys.len)
+        ));
+    }
+
     pub fn deinit(self: *Polygons, alloc: Alloc) void {
         c.manifold_destruct_polygons(@as(?*c.ManifoldPolygons, @ptrCast(self)));
         const many_ptr = @as([*]u8, @ptrCast(self));
@@ -307,6 +322,27 @@ pub const Polygons = opaque {
     pub fn getPoint(self: *Polygons, simple_idx: usize, point_idx: usize) [2]f64 {
         const vec2 = c.manifold_polygons_get_point(@as(?*c.ManifoldPolygons, @ptrCast(self)), simple_idx, point_idx);
         return .{ vec2.x, vec2.y };
+    }
+};
+
+//----------------------------------------------------------------------------------------------------------
+//
+// SimplePolygon
+//
+//----------------------------------------------------------------------------------------------------------
+
+pub const SimplePolygon = opaque {
+    pub fn init(alloc: Alloc, points: []const Vec2) !*SimplePolygon {
+        const mem = try alloc.alloc(u8, c.manifold_simple_polygon_size());
+        return @as(*SimplePolygon, @ptrCast(
+            c.manifold_simple_polygon(mem.ptr, @constCast(points.ptr), points.len)
+        ));
+    }
+
+    pub fn deinit(self: *SimplePolygon, alloc: Alloc) void {
+        c.manifold_destruct_simple_polygon(@as(?*c.ManifoldSimplePolygon, @ptrCast(self)));
+        const many_ptr = @as([*]u8, @ptrCast(self));
+        alloc.free(many_ptr[0..c.manifold_simple_polygon_size()]);
     }
 };
 
