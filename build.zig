@@ -31,19 +31,25 @@ pub fn build(b: *std.Build) void {
     });
     zmanifold.addIncludePath(b.path("libs/manifold/bindings/c/include"));
 
-    const manifoldc = b.addStaticLibrary(.{
+    const manifoldc = b.addLibrary(.{
         .name = "manifoldc",
-        .target = target,
-        .optimize = optimize,
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .root_source_file = null,
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .link_libcpp = true,
+        }),
     });
     b.installArtifact(manifoldc);
 
-    manifoldc.addIncludePath(b.path("libs/Clipper2/CPP/Clipper2Lib/include"));
-    if (options.manifold_parallel) manifoldc.addIncludePath(b.path("libs/oneTBB/include"));
+    manifoldc.root_module.addIncludePath(b.path("libs/Clipper2/CPP/Clipper2Lib/include"));
+    if (options.manifold_parallel) manifoldc.root_module.addIncludePath(b.path("libs/oneTBB/include"));
 
-    manifoldc.addIncludePath(b.path("libs/manifold/include"));
-    manifoldc.addIncludePath(b.path("libs/manifold/bindings/c"));
-    manifoldc.addIncludePath(b.path("libs/manifold/bindings/c/include"));
+    manifoldc.root_module.addIncludePath(b.path("libs/manifold/include"));
+    manifoldc.root_module.addIncludePath(b.path("libs/manifold/bindings/c"));
+    manifoldc.root_module.addIncludePath(b.path("libs/manifold/bindings/c/include"));
 
     const cpp_flags: []const []const u8 = &.{
         "-std=c++17",
@@ -53,7 +59,7 @@ pub fn build(b: *std.Build) void {
         if (options.manifold_parallel) "-DTBB_USE_DEBUG=0" else "",
     };
 
-    manifoldc.addCSourceFiles(.{
+    manifoldc.root_module.addCSourceFiles(.{
         .files = &.{
             "libs/manifold/bindings/c/box.cpp",
             "libs/manifold/bindings/c/conv.cpp",
@@ -82,14 +88,14 @@ pub fn build(b: *std.Build) void {
         },
         .flags = cpp_flags,
     });
-    if (options.manifold_export) manifoldc.addCSourceFiles(.{
+    if (options.manifold_export) manifoldc.root_module.addCSourceFiles(.{
         .files = &.{
             "libs/manifold/src/meshIO/meshIO.cpp",
             "libs/manifold/bindings/c/meshIOc.cpp",
         },
         .flags = cpp_flags,
     });
-    if (options.manifold_parallel) manifoldc.addCSourceFiles(.{
+    if (options.manifold_parallel) manifoldc.root_module.addCSourceFiles(.{
         .files = &.{
             "libs/oneTBB/src/tbb/address_waiter.cpp",
             "libs/oneTBB/src/tbb/allocator.cpp",
@@ -128,18 +134,22 @@ pub fn build(b: *std.Build) void {
         .flags = &.{ "-std=c++17", "-DTBB_USE_DEBUG=0" },
     });
 
-    const clipper = b.addStaticLibrary(.{
+    const clipper = b.addLibrary(.{
         .name = "clipper",
-        .target = target,
-        .optimize = optimize,
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .root_source_file = null,
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .link_libcpp = true,
+        }),
     });
     b.installArtifact(clipper);
 
-    clipper.addIncludePath(b.path("libs/Clipper2/CPP/Clipper2Lib/include"));
-    clipper.linkLibC();
-    clipper.linkLibCpp();
+    clipper.root_module.addIncludePath(b.path("libs/Clipper2/CPP/Clipper2Lib/include"));
 
-    clipper.addCSourceFiles(.{
+    clipper.root_module.addCSourceFiles(.{
         .files = &.{
             "libs/Clipper2/CPP/Clipper2Lib/src/clipper.engine.cpp",
             "libs/Clipper2/CPP/Clipper2Lib/src/clipper.offset.cpp",
@@ -151,16 +161,16 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    manifoldc.linkLibC();
-    manifoldc.linkLibCpp();
-    manifoldc.linkLibrary(clipper);
+    manifoldc.root_module.linkLibrary(clipper);
 
     const test_step = b.step("test", "Run zmanifold tests");
     const tests = b.addTest(.{
         .name = "zmanifold-tests",
-        .root_source_file = b.path("src/zmanifold.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/zmanifold.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     b.installArtifact(tests);
     tests.root_module.addImport("zmanifold_options", options_module);
