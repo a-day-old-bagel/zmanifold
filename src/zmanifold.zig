@@ -150,7 +150,7 @@ pub const Manifold = opaque {
 
     //----- MESH EXTRACTION --------------------------------------------------------------------------//
 
-    pub const VertFunc = fn (?*f64, c.ManifoldVec3, ?*const f64, ?*anyopaque) callconv(.C) void;
+    pub const VertFunc = fn (?*f64, c.ManifoldVec3, ?*const f64, ?*anyopaque) callconv(.c) void;
     pub fn setVertProperties(self: *Manifold, alloc: Alloc, num_prop: i32, fun: VertFunc, ctx: ?*anyopaque) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
