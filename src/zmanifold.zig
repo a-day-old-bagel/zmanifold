@@ -41,7 +41,6 @@ pub const Vec3 = c.ManifoldVec3;
 //----------------------------------------------------------------------------------------------------------
 
 pub const Manifold = opaque {
-
     pub fn initEmpty(alloc: Alloc) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_empty(mem.ptr)));
@@ -82,13 +81,25 @@ pub const Manifold = opaque {
         ));
     }
 
+    pub fn initCone(alloc: Alloc, height: f64, rad_lo: f64, segments: i32, center: bool) !*Manifold {
+        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        return @as(*Manifold, @ptrCast(
+            c.manifold_cylinder(mem.ptr, height, rad_lo, 0, segments, if (center) 1 else 0),
+        ));
+    }
+
+    pub fn initSphere(alloc: Alloc, radius: f64, circular_segments: i32) !*Manifold {
+        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        return @as(*Manifold, @ptrCast(
+            c.manifold_sphere(mem.ptr, radius, circular_segments),
+        ));
+    }
+
     //----- POLYGONS: 2D<-->3D -----------------------------------------------------------------------//
 
     pub fn initRevolution(alloc: Alloc, polygons: *Polygons, segments: i32, degrees: f64) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
-        return @as(*Manifold, @ptrCast(
-            c.manifold_revolve(mem.ptr, @as(?*c.ManifoldPolygons, @ptrCast(polygons)), segments, degrees)
-        ));
+        return @as(*Manifold, @ptrCast(c.manifold_revolve(mem.ptr, @as(?*c.ManifoldPolygons, @ptrCast(polygons)), segments, degrees)));
     }
 
     pub fn project(self: *Manifold, alloc: Alloc) !*Polygons {
@@ -139,7 +150,7 @@ pub const Manifold = opaque {
 
     //----- MESH EXTRACTION --------------------------------------------------------------------------//
 
-    pub const VertFunc = fn (?*f64, c.ManifoldVec3, ?*const f64, ?*anyopaque) callconv(.C) void;
+    pub const VertFunc = fn (?*f64, c.ManifoldVec3, ?*const f64, ?*anyopaque) callconv(.c) void;
     pub fn setVertProperties(self: *Manifold, alloc: Alloc, num_prop: i32, fun: VertFunc, ctx: ?*anyopaque) !*Manifold {
         const mem = try alloc.alloc(u8, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
@@ -239,7 +250,6 @@ pub const ManifoldVec = opaque {
 //----------------------------------------------------------------------------------------------------------
 
 pub const MeshGL = opaque {
-
     pub fn init(alloc: Alloc, vert_props: [*]f32, n_verts: usize, n_props: usize, indices: []u32) !*MeshGL {
         const mem = try alloc.alloc(u8, c.manifold_meshgl_size());
         return @as(*MeshGL, @ptrCast(c.manifold_meshgl(
@@ -300,9 +310,7 @@ pub const MeshGL = opaque {
 pub const Polygons = opaque {
     pub fn initFromSimples(alloc: Alloc, polys: []const *SimplePolygon) !*Polygons {
         const mem = try alloc.alloc(u8, c.manifold_polygons_size());
-        return @as(*Polygons, @ptrCast(
-            c.manifold_polygons(mem.ptr, @as(?*?*c.ManifoldSimplePolygon, @ptrCast(@constCast(polys.ptr))), polys.len)
-        ));
+        return @as(*Polygons, @ptrCast(c.manifold_polygons(mem.ptr, @as(?*?*c.ManifoldSimplePolygon, @ptrCast(@constCast(polys.ptr))), polys.len)));
     }
 
     pub fn deinit(self: *Polygons, alloc: Alloc) void {
@@ -334,9 +342,7 @@ pub const Polygons = opaque {
 pub const SimplePolygon = opaque {
     pub fn init(alloc: Alloc, points: []const Vec2) !*SimplePolygon {
         const mem = try alloc.alloc(u8, c.manifold_simple_polygon_size());
-        return @as(*SimplePolygon, @ptrCast(
-            c.manifold_simple_polygon(mem.ptr, @constCast(points.ptr), points.len)
-        ));
+        return @as(*SimplePolygon, @ptrCast(c.manifold_simple_polygon(mem.ptr, @constCast(points.ptr), points.len)));
     }
 
     pub fn deinit(self: *SimplePolygon, alloc: Alloc) void {
@@ -403,8 +409,8 @@ pub const CrossSection = opaque {
 //
 //----------------------------------------------------------------------------------------------------------
 
-test "zmanifold.decls" {
-    std.testing.refAllDeclsRecursive(@This());
+test {
+    std.testing.refAllDecls(@This());
 }
 
 test "zmanifold.init" {
