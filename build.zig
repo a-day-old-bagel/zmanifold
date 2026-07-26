@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
         .manifold_export = b.option(
             bool,
             "manifold_export",
-            "Build mesh export (via assimp) utility library",
+            "Enable Manifold's iostream-based OBJ import/export C API",
         ) orelse false,
         .manifold_parallel = b.option(
             bool,
@@ -55,7 +55,8 @@ pub fn build(b: *std.Build) void {
     const cpp_flags: []const []const u8 = &.{
         "-std=c++17",
         "-fno-exceptions",
-        if (options.manifold_export) "-DMANIFOLD_EXPORT" else "",
+        if (!options.manifold_export) "-DMANIFOLD_NO_IOSTREAM" else "",
+        if (!options.manifold_export) "-DMANIFOLD_NO_FILESYSTEM" else "",
         if (options.manifold_parallel) "-DMANIFOLD_PAR=1" else "-DMANIFOLD_PAR=-1",
         if (options.manifold_parallel) "-DTBB_USE_DEBUG=0" else "",
     };
@@ -75,9 +76,11 @@ pub fn build(b: *std.Build) void {
             "libs/manifold/src/constructors.cpp",
             "libs/manifold/src/csg_tree.cpp",
             "libs/manifold/src/edge_op.cpp",
+            "libs/manifold/src/execution_impl.cpp",
             "libs/manifold/src/face_op.cpp",
             "libs/manifold/src/impl.cpp",
             "libs/manifold/src/manifold.cpp",
+            "libs/manifold/src/minkowski.cpp",
             "libs/manifold/src/polygon.cpp",
             "libs/manifold/src/properties.cpp",
             "libs/manifold/src/quickhull.cpp",
@@ -86,13 +89,6 @@ pub fn build(b: *std.Build) void {
             "libs/manifold/src/sort.cpp",
             "libs/manifold/src/subdivision.cpp",
             "libs/manifold/src/tree2d.cpp",
-        },
-        .flags = cpp_flags,
-    });
-    if (options.manifold_export) manifoldc.root_module.addCSourceFiles(.{
-        .files = &.{
-            "libs/manifold/src/meshIO/meshIO.cpp",
-            "libs/manifold/bindings/c/meshIOc.cpp",
         },
         .flags = cpp_flags,
     });
@@ -132,7 +128,14 @@ pub fn build(b: *std.Build) void {
             "libs/oneTBB/src/tbb/threading_control.cpp",
             "libs/oneTBB/src/tbb/version.cpp",
         },
-        .flags = &.{ "-std=c++17", "-DTBB_USE_DEBUG=0" },
+        .flags = &.{
+            "-std=c++17",
+            "-DTBB_USE_DEBUG=0",
+            "-D__TBB_BUILD=1",
+            "-D__TBB_DYNAMIC_LOAD_ENABLED=0",
+            "-D__TBB_SOURCE_DIRECTLY_INCLUDED=1",
+            "-D__TBB_SKIP_DEPENDENCY_SIGNATURE_VERIFICATION=1",
+        },
     });
 
     const clipper = b.addLibrary(.{

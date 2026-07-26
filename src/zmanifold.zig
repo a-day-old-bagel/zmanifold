@@ -2,7 +2,7 @@ const std = @import("std");
 const Alloc = std.mem.Allocator;
 const options = @import("zmanifold_options");
 const c = @cImport({
-    if (options.manifold_export) @cDefine("MANIFOLD_EXPORT", "");
+    if (!options.manifold_export) @cDefine("MANIFOLD_NO_IOSTREAM", "");
     @cInclude("manifold/manifoldc.h");
     @cInclude("manifold/types.h");
 });
@@ -29,6 +29,8 @@ pub const ManifoldStatus = enum {
     face_id_wrong_length,
     invalid_construction,
     result_too_large,
+    invalid_tangents,
+    cancelled,
 };
 
 pub const Vec2 = c.ManifoldVec2;
@@ -272,13 +274,13 @@ pub const MeshGL = opaque {
         return @as(*MeshGL, @ptrCast(c.manifold_meshgl_merge(mem.ptr, @as(?*c.ManifoldMeshGL, @ptrCast(self)))));
     }
 
-    pub fn getNumProps(self: *MeshGL) i32 {
+    pub fn getNumProps(self: *MeshGL) usize {
         return c.manifold_meshgl_num_prop(@as(*c.ManifoldMeshGL, @ptrCast(self)));
     }
-    pub fn getNumVerts(self: *MeshGL) i32 {
+    pub fn getNumVerts(self: *MeshGL) usize {
         return c.manifold_meshgl_num_vert(@as(*c.ManifoldMeshGL, @ptrCast(self)));
     }
-    pub fn getNumTris(self: *MeshGL) i32 {
+    pub fn getNumTris(self: *MeshGL) usize {
         return c.manifold_meshgl_num_tri(@as(*c.ManifoldMeshGL, @ptrCast(self)));
     }
 
@@ -430,4 +432,188 @@ test "zmanifold.trim_tetrahedron" {
 
     const num_verts = sliced.getNumVerts();
     try std.testing.expect(num_verts == 6);
+}
+
+test "zmanifold.boolean operations and manifold vectors" {
+    const alloc = std.testing.allocator;
+
+    const cube = try Manifold.initCube(alloc, 2, 2, 2, true);
+    defer cube.deinit(alloc);
+    const shifted = try cube.translate(alloc, 1, 0, 0);
+    defer shifted.deinit(alloc);
+
+    const joined = try cube.boolean(alloc, shifted, .add);
+    defer joined.deinit(alloc);
+    const overlap = try cube.boolean(alloc, shifted, .intersect);
+    defer overlap.deinit(alloc);
+    const cut = try cube.boolean(alloc, shifted, .subtract);
+    defer cut.deinit(alloc);
+
+    try std.testing.expectEqual(ManifoldStatus.no_error, joined.status());
+    try std.testing.expectEqual(ManifoldStatus.no_error, overlap.status());
+    try std.testing.expectEqual(ManifoldStatus.no_error, cut.status());
+    try std.testing.expect(!joined.isEmpty());
+    try std.testing.expect(!overlap.isEmpty());
+    try std.testing.expect(!cut.isEmpty());
+
+    const manifolds = try ManifoldVec.initEmpty(alloc);
+    defer manifolds.deinit(alloc);
+    manifolds.reserve(2);
+    manifolds.pushBack(cube);
+    manifolds.pushBack(shifted);
+    try std.testing.expectEqual(@as(usize, 2), manifolds.len());
+
+    const first = try manifolds.get(alloc, 0);
+    defer first.deinit(alloc);
+    try std.testing.expectEqual(cube.getNumVerts(), first.getNumVerts());
+
+    const sized_manifolds = try ManifoldVec.initSize(alloc, 2);
+    defer sized_manifolds.deinit(alloc);
+    sized_manifolds.set(0, cube);
+    sized_manifolds.set(1, shifted);
+
+    const batched = try Manifold.batchBoolean(alloc, sized_manifolds, .add);
+    defer batched.deinit(alloc);
+    try std.testing.expectEqual(ManifoldStatus.no_error, batched.status());
+    try std.testing.expectEqual(joined.getNumVerts(), batched.getNumVerts());
+
+    const copied = try Manifold.initCopy(batched, alloc);
+    defer copied.deinit(alloc);
+    const original = try copied.asOriginal(alloc);
+    defer original.deinit(alloc);
+    try std.testing.expectEqual(ManifoldStatus.no_error, original.status());
+}
+
+test "zmanifold.mesh round trip and extraction" {
+    const alloc = std.testing.allocator;
+
+    const cube = try Manifold.initCube(alloc, 1, 1, 1, false);
+    defer cube.deinit(alloc);
+    const mesh = try cube.getMeshGL(alloc);
+    defer mesh.deinit(alloc);
+
+    const num_props = mesh.getNumProps();
+    const num_verts = mesh.getNumVerts();
+    const num_tris = mesh.getNumTris();
+    try std.testing.expectEqual(num_props * num_verts, mesh.getVertPropertiesLength());
+    try std.testing.expectEqual(num_tris * 3, mesh.getTriangleVertIndicesLength());
+
+    const vert_props = try mesh.getVertProperties(alloc);
+    defer alloc.free(vert_props);
+    const indices = try mesh.getTriangleVertIndices(alloc);
+    defer alloc.free(indices);
+
+    const input_mesh = try MeshGL.init(alloc, vert_props.ptr, num_verts, num_props, indices);
+    defer input_mesh.deinit(alloc);
+    const round_trip = try Manifold.initFromMeshGL(alloc, input_mesh);
+    defer round_trip.deinit(alloc);
+
+    try std.testing.expectEqual(ManifoldStatus.no_error, round_trip.status());
+    try std.testing.expectEqual(cube.getNumVerts(), round_trip.getNumVerts());
+}
+
+test "zmanifold.vertex properties and normals" {
+    const alloc = std.testing.allocator;
+
+    const cube = try Manifold.initCube(alloc, 1, 1, 1, true);
+    defer cube.deinit(alloc);
+    const with_properties = try cube.setVertProperties(alloc, 7, testVertProperties, null);
+    defer with_properties.deinit(alloc);
+    const with_normals = try with_properties.calculateNormals(alloc, 0, 0);
+    defer with_normals.deinit(alloc);
+    const mesh = try with_normals.getMeshGL(alloc);
+    defer mesh.deinit(alloc);
+
+    try std.testing.expectEqual(@as(usize, 10), mesh.getNumProps());
+    try std.testing.expect(mesh.getNumVerts() > 0);
+    try std.testing.expectEqual(ManifoldStatus.no_error, with_normals.status());
+}
+
+fn testVertProperties(new: ?*f64, _: Vec3, old: ?*const f64, _: ?*anyopaque) callconv(.c) void {
+    const output: [*]f64 = @ptrCast(new.?);
+    if (old) |existing| {
+        const input: [*]const f64 = @ptrCast(existing);
+        output[0] = input[0];
+        output[1] = input[1];
+        output[2] = input[2];
+    }
+    output[3] = 0.25;
+    output[4] = 0.5;
+    output[5] = 0.75;
+    output[6] = 1;
+}
+
+test "zmanifold subtraction orients preserved cavity normals" {
+    const alloc = std.testing.allocator;
+
+    const outer = try Manifold.initCube(alloc, 4, 4, 4, true);
+    defer outer.deinit(alloc);
+    const outer_properties = try outer.setVertProperties(alloc, 7, testVertProperties, null);
+    defer outer_properties.deinit(alloc);
+    const outer_normals = try outer_properties.calculateNormals(alloc, 0, 0);
+    defer outer_normals.deinit(alloc);
+
+    const inner = try Manifold.initCube(alloc, 2, 2, 2, true);
+    defer inner.deinit(alloc);
+    const inner_normals = try inner.calculateNormals(alloc, 0, 0);
+    defer inner_normals.deinit(alloc);
+    const inner_properties = try inner_normals.setVertProperties(alloc, 7, testVertProperties, null);
+    defer inner_properties.deinit(alloc);
+
+    const hollow = try outer_normals.boolean(alloc, inner_properties, .subtract);
+    defer hollow.deinit(alloc);
+    const mesh = try hollow.getMeshGL(alloc);
+    defer mesh.deinit(alloc);
+    const vertices = try mesh.getVertProperties(alloc);
+    defer alloc.free(vertices);
+
+    const stride = mesh.getNumProps();
+    try std.testing.expectEqual(@as(usize, 10), stride);
+    var cavity_vertices: usize = 0;
+    for (0..mesh.getNumVerts()) |vertex| {
+        const properties = vertices[vertex * stride ..][0..stride];
+        const position = properties[0..3];
+        const normal = properties[3..6];
+        const max_abs_position = @max(@abs(position[0]), @abs(position[1]), @abs(position[2]));
+        if (max_abs_position < 1.001) {
+            cavity_vertices += 1;
+            const alignment = position[0] * normal[0] +
+                position[1] * normal[1] +
+                position[2] * normal[2];
+            try std.testing.expect(alignment < -0.9);
+        }
+    }
+    try std.testing.expect(cavity_vertices > 0);
+}
+
+test "zmanifold.polygons, cross sections, and revolution" {
+    const alloc = std.testing.allocator;
+    const points = [_]Vec2{
+        .{ .x = 1, .y = 0 },
+        .{ .x = 2, .y = 0 },
+        .{ .x = 2, .y = 1 },
+        .{ .x = 1, .y = 1 },
+    };
+
+    const simple = try SimplePolygon.init(alloc, &points);
+    defer simple.deinit(alloc);
+    const polygons = try Polygons.initFromSimples(alloc, &.{simple});
+    defer polygons.deinit(alloc);
+
+    try std.testing.expectEqual(@as(usize, 1), polygons.getNumSimplePolygons());
+    try std.testing.expectEqual(@as(usize, points.len), polygons.getSimplePolygonNumPoints(0));
+    try std.testing.expectEqual([2]f64{ 2, 1 }, polygons.getPoint(0, 2));
+
+    const cross_section = try CrossSection.fromPolygons(alloc, polygons, .positive);
+    defer cross_section.deinit(alloc);
+    const simplified = try cross_section.simplify(alloc, 0.0001);
+    defer simplified.deinit(alloc);
+    const output_polygons = try simplified.toPolygons(alloc);
+    defer output_polygons.deinit(alloc);
+    try std.testing.expectEqual(@as(usize, 1), output_polygons.getNumSimplePolygons());
+
+    const revolved = try Manifold.initRevolution(alloc, polygons, 16, 360);
+    defer revolved.deinit(alloc);
+    try std.testing.expectEqual(ManifoldStatus.no_error, revolved.status());
+    try std.testing.expect(!revolved.isEmpty());
 }
