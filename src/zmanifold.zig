@@ -64,6 +64,11 @@ pub const Manifold = opaque {
         return @as(*Manifold, @ptrCast(c.manifold_of_meshgl(mem.ptr, @as(?*c.ManifoldMeshGL, @ptrCast(mesh_gl)))));
     }
 
+    pub fn initFromMeshGL64(alloc: Alloc, mesh_gl: *MeshGL64) !*Manifold {
+        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        return @as(*Manifold, @ptrCast(c.manifold_of_meshgl64(mem.ptr, @as(?*c.ManifoldMeshGL64, @ptrCast(mesh_gl)))));
+    }
+
     //----- SHAPES -----------------------------------------------------------------------------------//
 
     pub fn initTetrahedron(alloc: Alloc) !*Manifold {
@@ -184,6 +189,10 @@ pub const Manifold = opaque {
         return c.manifold_num_vert(@as(?*c.ManifoldManifold, @ptrCast(self)));
     }
 
+    pub fn getTolerance(self: *Manifold) f64 {
+        return c.manifold_get_tolerance(@as(?*c.ManifoldManifold, @ptrCast(self)));
+    }
+
     //----- MISC -------------------------------------------------------------------------------------//
 
     pub fn asOriginal(self: *Manifold, alloc: Alloc) !*Manifold {
@@ -300,6 +309,32 @@ pub const MeshGL = opaque {
         const num_uints = self.getTriangleVertIndicesLength();
         const mem = try alloc.alloc(u32, num_uints);
         return c.manifold_meshgl_tri_verts(mem.ptr, @as(*c.ManifoldMeshGL, @ptrCast(self)))[0..num_uints];
+    }
+};
+
+//----------------------------------------------------------------------------------------------------------
+//
+// MeshGL64
+//
+//----------------------------------------------------------------------------------------------------------
+
+pub const MeshGL64 = opaque {
+    pub fn init(alloc: Alloc, vert_props: [*]f64, n_verts: usize, n_props: usize, indices: []u64) !*MeshGL64 {
+        const mem = try alloc.alloc(u8, c.manifold_meshgl64_size());
+        return @as(*MeshGL64, @ptrCast(c.manifold_meshgl64(
+            mem.ptr,
+            vert_props,
+            n_verts,
+            n_props,
+            indices.ptr,
+            indices.len / 3,
+        )));
+    }
+
+    pub fn deinit(self: *MeshGL64, alloc: Alloc) void {
+        c.manifold_destruct_meshgl64(@as(?*c.ManifoldMeshGL64, @ptrCast(self)));
+        const many_ptr = @as([*]u8, @ptrCast(self));
+        alloc.free(many_ptr[0..c.manifold_meshgl64_size()]);
     }
 };
 
@@ -510,6 +545,38 @@ test "zmanifold.mesh round trip and extraction" {
 
     try std.testing.expectEqual(ManifoldStatus.no_error, round_trip.status());
     try std.testing.expectEqual(cube.getNumVerts(), round_trip.getNumVerts());
+}
+
+test "zmanifold.MeshGL64 preserves a fine tolerance over a large build volume" {
+    const alloc = std.testing.allocator;
+
+    var vertices = [_]f64{
+        -1_000_000, -1_000_000, 0,
+        1_000_000,  -1_000_000, 0,
+        1_000_000,  1_000_000,  0,
+        -1_000_000, 1_000_000,  0,
+        -1_000_000, -1_000_000, 1,
+        1_000_000,  -1_000_000, 1,
+        1_000_000,  1_000_000,  1,
+        -1_000_000, 1_000_000,  1,
+    };
+    var indices = [_]u64{
+        0, 2, 1, 0, 3, 2,
+        4, 5, 6, 4, 6, 7,
+        0, 1, 5, 0, 5, 4,
+        1, 2, 6, 1, 6, 5,
+        2, 3, 7, 2, 7, 6,
+        3, 0, 4, 3, 4, 7,
+    };
+
+    const mesh = try MeshGL64.init(alloc, &vertices, 8, 3, &indices);
+    defer mesh.deinit(alloc);
+    const manifold = try Manifold.initFromMeshGL64(alloc, mesh);
+    defer manifold.deinit(alloc);
+
+    try std.testing.expectEqual(ManifoldStatus.no_error, manifold.status());
+    try std.testing.expectEqual(@as(usize, 8), manifold.getNumVerts());
+    try std.testing.expect(manifold.getTolerance() < 0.001);
 }
 
 test "zmanifold.vertex properties and normals" {
