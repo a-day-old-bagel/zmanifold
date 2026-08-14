@@ -165,6 +165,33 @@ pub const Manifold = opaque {
         return @as(*Manifold, @ptrCast(c.manifold_translate(mem.ptr, original, x, y, z)));
     }
 
+    /// Applies a column-basis rigid or affine transform and translation.
+    pub fn transform(
+        self: *Manifold,
+        alloc: Alloc,
+        basis: [3][3]f64,
+        translation: [3]f64,
+    ) !*Manifold {
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
+        const original = @as(?*c.ManifoldManifold, @ptrCast(self));
+        return @as(*Manifold, @ptrCast(c.manifold_transform(
+            mem.ptr,
+            original,
+            basis[0][0],
+            basis[0][1],
+            basis[0][2],
+            basis[1][0],
+            basis[1][1],
+            basis[1][2],
+            basis[2][0],
+            basis[2][1],
+            basis[2][2],
+            translation[0],
+            translation[1],
+            translation[2],
+        )));
+    }
+
     //----- MESH EXTRACTION --------------------------------------------------------------------------//
 
     pub const VertFunc = fn (?*f64, c.ManifoldVec3, ?*const f64, ?*anyopaque) callconv(.c) void;
@@ -487,6 +514,32 @@ test "zmanifold.trim_tetrahedron" {
 
     const num_verts = sliced.getNumVerts();
     try std.testing.expect(num_verts == 6);
+}
+
+test "zmanifold affine transform uses column basis axes" {
+    const alloc = std.testing.allocator;
+    const cube = try Manifold.initCube(alloc, 2, 4, 6, true);
+    defer cube.deinit(alloc);
+    const transformed = try cube.transform(
+        alloc,
+        .{ .{ 0, 1, 0 }, .{ 0, 0, 1 }, .{ 1, 0, 0 } },
+        .{ 10, 20, 30 },
+    );
+    defer transformed.deinit(alloc);
+    const mesh = try transformed.getMeshGL(alloc);
+    defer mesh.deinit(alloc);
+    const vertices = try mesh.getVertProperties(alloc);
+    defer alloc.free(vertices);
+
+    var min: [3]f32 = @splat(std.math.inf(f32));
+    var max: [3]f32 = @splat(-std.math.inf(f32));
+    for (0..mesh.getNumVerts()) |vertex| for (0..3) |axis| {
+        const value = vertices[vertex * mesh.getNumProps() + axis];
+        min[axis] = @min(min[axis], value);
+        max[axis] = @max(max[axis], value);
+    };
+    try std.testing.expectEqualSlices(f32, &.{ 7, 19, 28 }, &min);
+    try std.testing.expectEqualSlices(f32, &.{ 13, 21, 32 }, &max);
 }
 
 test "zmanifold.boolean operations and manifold vectors" {
