@@ -7,6 +7,17 @@ const c = @cImport({
     @cInclude("manifold/types.h");
 });
 
+const opaque_alignment: std.mem.Alignment = .@"16";
+
+fn allocOpaque(alloc: Alloc, size: usize) ![]align(16) u8 {
+    return alloc.alignedAlloc(u8, opaque_alignment, size);
+}
+
+fn freeOpaque(alloc: Alloc, pointer: anytype, size: usize) void {
+    const bytes: [*]align(16) u8 = @ptrCast(@alignCast(pointer));
+    alloc.free(bytes[0..size]);
+}
+
 // Maps to ManifoldOpType
 pub const BooleanOperation = enum {
     add,
@@ -44,59 +55,58 @@ pub const Vec3 = c.ManifoldVec3;
 
 pub const Manifold = opaque {
     pub fn initEmpty(alloc: Alloc) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_empty(mem.ptr)));
     }
 
     pub fn deinit(self: *Manifold, alloc: Alloc) void {
         c.manifold_destruct_manifold(@as(?*c.ManifoldManifold, @ptrCast(self)));
-        const many_ptr = @as([*]u8, @ptrCast(self));
-        alloc.free(many_ptr[0..c.manifold_manifold_size()]);
+        freeOpaque(alloc, self, c.manifold_manifold_size());
     }
 
     pub fn initCopy(original: *Manifold, alloc: Alloc) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_copy(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(original)))));
     }
 
     pub fn initFromMeshGL(alloc: Alloc, mesh_gl: *MeshGL) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_of_meshgl(mem.ptr, @as(?*c.ManifoldMeshGL, @ptrCast(mesh_gl)))));
     }
 
     pub fn initFromMeshGL64(alloc: Alloc, mesh_gl: *MeshGL64) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_of_meshgl64(mem.ptr, @as(?*c.ManifoldMeshGL64, @ptrCast(mesh_gl)))));
     }
 
     //----- SHAPES -----------------------------------------------------------------------------------//
 
     pub fn initTetrahedron(alloc: Alloc) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_tetrahedron(mem.ptr)));
     }
 
     pub fn initCube(alloc: Alloc, x: f64, y: f64, z: f64, center: bool) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_cube(mem.ptr, x, y, z, if (center) 1 else 0)));
     }
 
     pub fn initCylinder(alloc: Alloc, height: f64, rad_lo: f64, rad_hi: f64, segments: i32, center: bool) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(
             c.manifold_cylinder(mem.ptr, height, rad_lo, rad_hi, segments, if (center) 1 else 0),
         ));
     }
 
     pub fn initCone(alloc: Alloc, height: f64, rad_lo: f64, segments: i32, center: bool) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(
             c.manifold_cylinder(mem.ptr, height, rad_lo, 0, segments, if (center) 1 else 0),
         ));
     }
 
     pub fn initSphere(alloc: Alloc, radius: f64, circular_segments: i32) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(
             c.manifold_sphere(mem.ptr, radius, circular_segments),
         ));
@@ -105,32 +115,32 @@ pub const Manifold = opaque {
     //----- POLYGONS: 2D<-->3D -----------------------------------------------------------------------//
 
     pub fn initRevolution(alloc: Alloc, polygons: *Polygons, segments: i32, degrees: f64) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_revolve(mem.ptr, @as(?*c.ManifoldPolygons, @ptrCast(polygons)), segments, degrees)));
     }
 
     pub fn project(self: *Manifold, alloc: Alloc) !*Polygons {
-        const mem = try alloc.alloc(u8, c.manifold_polygons_size());
+        const mem = try allocOpaque(alloc, c.manifold_polygons_size());
         return @as(*Polygons, @ptrCast(c.manifold_project(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(self)))));
     }
 
     //----- BOOLEAN OPERATIONS -----------------------------------------------------------------------//
 
     pub fn boolean(self: *Manifold, alloc: Alloc, other: *Manifold, operation: BooleanOperation) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         const first = @as(?*c.ManifoldManifold, @ptrCast(self));
         const second = @as(?*c.ManifoldManifold, @ptrCast(other));
         return @as(*Manifold, @ptrCast(c.manifold_boolean(mem.ptr, first, second, @intFromEnum(operation))));
     }
 
     pub fn batchBoolean(alloc: Alloc, vec: *ManifoldVec, operation: BooleanOperation) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         const c_vec = @as(?*c.ManifoldManifoldVec, @ptrCast(vec));
         return @as(*Manifold, @ptrCast(c.manifold_batch_boolean(mem.ptr, c_vec, @intFromEnum(operation))));
     }
 
     pub fn trimByPlane(self: *Manifold, alloc: Alloc, nx: f64, ny: f64, nz: f64, offset: f64) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
         return @as(*Manifold, @ptrCast(c.manifold_trim_by_plane(mem.ptr, original, nx, ny, nz, offset)));
     }
@@ -138,19 +148,19 @@ pub const Manifold = opaque {
     //----- TRANSFORMATIONS --------------------------------------------------------------------------//
 
     pub fn scale(self: *Manifold, alloc: Alloc, x: f64, y: f64, z: f64) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
         return @as(*Manifold, @ptrCast(c.manifold_scale(mem.ptr, original, x, y, z)));
     }
 
     pub fn rotate(self: *Manifold, alloc: Alloc, x: f64, y: f64, z: f64) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
         return @as(*Manifold, @ptrCast(c.manifold_rotate(mem.ptr, original, x, y, z)));
     }
 
     pub fn translate(self: *Manifold, alloc: Alloc, x: f64, y: f64, z: f64) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
         return @as(*Manifold, @ptrCast(c.manifold_translate(mem.ptr, original, x, y, z)));
     }
@@ -159,19 +169,19 @@ pub const Manifold = opaque {
 
     pub const VertFunc = fn (?*f64, c.ManifoldVec3, ?*const f64, ?*anyopaque) callconv(.c) void;
     pub fn setVertProperties(self: *Manifold, alloc: Alloc, num_prop: i32, fun: VertFunc, ctx: ?*anyopaque) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
         return @as(*Manifold, @ptrCast(c.manifold_set_properties(mem.ptr, original, num_prop, fun, ctx)));
     }
 
     pub fn calculateNormals(self: *Manifold, alloc: Alloc, normal_idx: i32, min_sharp_angle: f64) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         const original = @as(?*c.ManifoldManifold, @ptrCast(self));
         return @as(*Manifold, @ptrCast(c.manifold_calculate_normals(mem.ptr, original, normal_idx, min_sharp_angle)));
     }
 
     pub fn getMeshGL(self: *Manifold, alloc: Alloc) !*MeshGL {
-        const mem = try alloc.alloc(u8, c.manifold_meshgl_size());
+        const mem = try allocOpaque(alloc, c.manifold_meshgl_size());
         return @as(*MeshGL, @ptrCast(c.manifold_get_meshgl(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(self)))));
     }
 
@@ -196,7 +206,7 @@ pub const Manifold = opaque {
     //----- MISC -------------------------------------------------------------------------------------//
 
     pub fn asOriginal(self: *Manifold, alloc: Alloc) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_as_original(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(self)))));
     }
 };
@@ -209,19 +219,18 @@ pub const Manifold = opaque {
 
 pub const ManifoldVec = opaque {
     pub fn initEmpty(alloc: Alloc) !*ManifoldVec {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_vec_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_vec_size());
         return @as(*ManifoldVec, @ptrCast(c.manifold_manifold_empty_vec(mem.ptr)));
     }
 
     pub fn initSize(alloc: Alloc, size: usize) !*ManifoldVec {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_vec_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_vec_size());
         return @as(*ManifoldVec, @ptrCast(c.manifold_manifold_vec(mem.ptr, size)));
     }
 
     pub fn deinit(self: *ManifoldVec, alloc: Alloc) void {
         c.manifold_destruct_manifold_vec(@as(?*c.ManifoldManifoldVec, @ptrCast(self)));
-        const many_ptr = @as([*]u8, @ptrCast(self));
-        alloc.free(many_ptr[0..c.manifold_manifold_vec_size()]);
+        freeOpaque(alloc, self, c.manifold_manifold_vec_size());
     }
 
     pub fn reserve(self: *ManifoldVec, size: usize) void {
@@ -233,7 +242,7 @@ pub const ManifoldVec = opaque {
     }
 
     pub fn get(self: *ManifoldVec, alloc: Alloc, index: usize) !*Manifold {
-        const mem = try alloc.alloc(u8, c.manifold_manifold_size());
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         const mani = c.manifold_manifold_vec_get(mem.ptr, @as(?*c.ManifoldManifoldVec, @ptrCast(self)), index);
         return @as(*Manifold, @ptrCast(mani));
     }
@@ -262,7 +271,7 @@ pub const ManifoldVec = opaque {
 
 pub const MeshGL = opaque {
     pub fn init(alloc: Alloc, vert_props: [*]f32, n_verts: usize, n_props: usize, indices: []u32) !*MeshGL {
-        const mem = try alloc.alloc(u8, c.manifold_meshgl_size());
+        const mem = try allocOpaque(alloc, c.manifold_meshgl_size());
         return @as(*MeshGL, @ptrCast(c.manifold_meshgl(
             mem.ptr,
             vert_props,
@@ -274,12 +283,11 @@ pub const MeshGL = opaque {
     }
     pub fn deinit(self: *MeshGL, alloc: Alloc) void {
         c.manifold_destruct_meshgl(@as(?*c.ManifoldMeshGL, @ptrCast(self)));
-        const many_ptr = @as([*]u8, @ptrCast(self));
-        alloc.free(many_ptr[0..c.manifold_meshgl_size()]);
+        freeOpaque(alloc, self, c.manifold_meshgl_size());
     }
 
     pub fn merge(self: *MeshGL, alloc: Alloc) !*MeshGL {
-        const mem = try alloc.alloc(u8, c.manifold_meshgl_size());
+        const mem = try allocOpaque(alloc, c.manifold_meshgl_size());
         return @as(*MeshGL, @ptrCast(c.manifold_meshgl_merge(mem.ptr, @as(?*c.ManifoldMeshGL, @ptrCast(self)))));
     }
 
@@ -320,7 +328,7 @@ pub const MeshGL = opaque {
 
 pub const MeshGL64 = opaque {
     pub fn init(alloc: Alloc, vert_props: [*]f64, n_verts: usize, n_props: usize, indices: []u64) !*MeshGL64 {
-        const mem = try alloc.alloc(u8, c.manifold_meshgl64_size());
+        const mem = try allocOpaque(alloc, c.manifold_meshgl64_size());
         return @as(*MeshGL64, @ptrCast(c.manifold_meshgl64(
             mem.ptr,
             vert_props,
@@ -333,8 +341,7 @@ pub const MeshGL64 = opaque {
 
     pub fn deinit(self: *MeshGL64, alloc: Alloc) void {
         c.manifold_destruct_meshgl64(@as(?*c.ManifoldMeshGL64, @ptrCast(self)));
-        const many_ptr = @as([*]u8, @ptrCast(self));
-        alloc.free(many_ptr[0..c.manifold_meshgl64_size()]);
+        freeOpaque(alloc, self, c.manifold_meshgl64_size());
     }
 };
 
@@ -346,14 +353,13 @@ pub const MeshGL64 = opaque {
 
 pub const Polygons = opaque {
     pub fn initFromSimples(alloc: Alloc, polys: []const *SimplePolygon) !*Polygons {
-        const mem = try alloc.alloc(u8, c.manifold_polygons_size());
+        const mem = try allocOpaque(alloc, c.manifold_polygons_size());
         return @as(*Polygons, @ptrCast(c.manifold_polygons(mem.ptr, @as(?*?*c.ManifoldSimplePolygon, @ptrCast(@constCast(polys.ptr))), polys.len)));
     }
 
     pub fn deinit(self: *Polygons, alloc: Alloc) void {
         c.manifold_destruct_polygons(@as(?*c.ManifoldPolygons, @ptrCast(self)));
-        const many_ptr = @as([*]u8, @ptrCast(self));
-        alloc.free(many_ptr[0..c.manifold_polygons_size()]);
+        freeOpaque(alloc, self, c.manifold_polygons_size());
     }
 
     pub fn getNumSimplePolygons(self: *Polygons) usize {
@@ -378,14 +384,13 @@ pub const Polygons = opaque {
 
 pub const SimplePolygon = opaque {
     pub fn init(alloc: Alloc, points: []const Vec2) !*SimplePolygon {
-        const mem = try alloc.alloc(u8, c.manifold_simple_polygon_size());
+        const mem = try allocOpaque(alloc, c.manifold_simple_polygon_size());
         return @as(*SimplePolygon, @ptrCast(c.manifold_simple_polygon(mem.ptr, @constCast(points.ptr), points.len)));
     }
 
     pub fn deinit(self: *SimplePolygon, alloc: Alloc) void {
         c.manifold_destruct_simple_polygon(@as(?*c.ManifoldSimplePolygon, @ptrCast(self)));
-        const many_ptr = @as([*]u8, @ptrCast(self));
-        alloc.free(many_ptr[0..c.manifold_simple_polygon_size()]);
+        freeOpaque(alloc, self, c.manifold_simple_polygon_size());
     }
 };
 
@@ -413,12 +418,11 @@ pub const CrossSection = opaque {
 
     pub fn deinit(self: *CrossSection, alloc: Alloc) void {
         c.manifold_destruct_cross_section(@as(?*c.ManifoldCrossSection, @ptrCast(self)));
-        const many_ptr = @as([*]u8, @ptrCast(self));
-        alloc.free(many_ptr[0..c.manifold_cross_section_size()]);
+        freeOpaque(alloc, self, c.manifold_cross_section_size());
     }
 
     pub fn fromPolygons(alloc: Alloc, polygons: *Polygons, fill_rule: FillRule) !*CrossSection {
-        const mem = try alloc.alloc(u8, c.manifold_cross_section_size());
+        const mem = try allocOpaque(alloc, c.manifold_cross_section_size());
         return @as(*CrossSection, @ptrCast(c.manifold_cross_section_of_polygons(
             mem.ptr,
             @as(?*c.ManifoldPolygons, @ptrCast(polygons)),
@@ -426,7 +430,7 @@ pub const CrossSection = opaque {
         )));
     }
     pub fn toPolygons(self: *CrossSection, alloc: Alloc) !*Polygons {
-        const mem = try alloc.alloc(u8, c.manifold_polygons_size());
+        const mem = try allocOpaque(alloc, c.manifold_polygons_size());
         return @as(*Polygons, @ptrCast(c.manifold_cross_section_to_polygons(
             mem.ptr,
             @as(?*c.ManifoldCrossSection, @ptrCast(self)),
@@ -434,7 +438,7 @@ pub const CrossSection = opaque {
     }
 
     pub fn simplify(self: *CrossSection, alloc: Alloc, epsilon: f64) !*CrossSection {
-        const mem = try alloc.alloc(u8, c.manifold_cross_section_size());
+        const mem = try allocOpaque(alloc, c.manifold_cross_section_size());
         const original = @as(?*c.ManifoldCrossSection, @ptrCast(self));
         return @as(*CrossSection, @ptrCast(c.manifold_cross_section_simplify(mem.ptr, original, epsilon)));
     }
@@ -456,6 +460,22 @@ test "zmanifold.init" {
 
     const num_verts = manifold.getNumVerts();
     try std.testing.expect(num_verts == 4);
+}
+
+test "opaque C++ storage remains aligned in an arena" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    _ = try alloc.alloc(u8, 3);
+    const manifold = try Manifold.initCube(alloc, 1, 1, 1, true);
+    defer manifold.deinit(alloc);
+    try std.testing.expectEqual(@as(usize, 0), @intFromPtr(manifold) % opaque_alignment.toByteUnits());
+
+    _ = try alloc.alloc(u8, 5);
+    const mesh = try manifold.getMeshGL(alloc);
+    defer mesh.deinit(alloc);
+    try std.testing.expectEqual(@as(usize, 0), @intFromPtr(mesh) % opaque_alignment.toByteUnits());
 }
 
 test "zmanifold.trim_tetrahedron" {
