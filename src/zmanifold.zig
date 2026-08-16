@@ -230,11 +230,69 @@ pub const Manifold = opaque {
         return c.manifold_get_tolerance(@as(?*c.ManifoldManifold, @ptrCast(self)));
     }
 
+    pub fn volume(self: *Manifold) f64 {
+        return c.manifold_volume(@as(?*c.ManifoldManifold, @ptrCast(self)));
+    }
+
+    pub fn getVolume(self: *Manifold) f64 {
+        return self.volume();
+    }
+
+    //----- RAY CASTING --------------------------------------------------------------------------------
+
+    pub fn rayCast(self: *Manifold, alloc: Alloc, origin: [3]f64, endpoint: [3]f64) !*RayHitVec {
+        const mem = try allocOpaque(alloc, c.manifold_ray_hit_vec_size());
+        return @as(*RayHitVec, @ptrCast(c.manifold_ray_cast(
+            mem.ptr,
+            @as(?*c.ManifoldManifold, @ptrCast(self)),
+            origin[0],
+            origin[1],
+            origin[2],
+            endpoint[0],
+            endpoint[1],
+            endpoint[2],
+        )));
+    }
+
     //----- MISC -------------------------------------------------------------------------------------//
 
     pub fn asOriginal(self: *Manifold, alloc: Alloc) !*Manifold {
         const mem = try allocOpaque(alloc, c.manifold_manifold_size());
         return @as(*Manifold, @ptrCast(c.manifold_as_original(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(self)))));
+    }
+};
+
+//----------------------------------------------------------------------------------------------------------
+//
+// RayHitVec
+//
+//----------------------------------------------------------------------------------------------------------
+
+pub const RayHit = struct {
+    face_id: u64,
+    distance: f64,
+    position: [3]f64,
+    normal: [3]f64,
+};
+
+pub const RayHitVec = opaque {
+    pub fn deinit(self: *RayHitVec, alloc: Alloc) void {
+        c.manifold_destruct_ray_hit_vec(@as(?*c.ManifoldRayHitVec, @ptrCast(self)));
+        freeOpaque(alloc, self, c.manifold_ray_hit_vec_size());
+    }
+
+    pub fn len(self: *RayHitVec) usize {
+        return c.manifold_ray_hit_vec_length(@as(?*c.ManifoldRayHitVec, @ptrCast(self)));
+    }
+
+    pub fn get(self: *RayHitVec, index: usize) RayHit {
+        const hit = c.manifold_ray_hit_vec_get(@as(?*c.ManifoldRayHitVec, @ptrCast(self)), index);
+        return .{
+            .face_id = hit.face_id,
+            .distance = hit.distance,
+            .position = .{ hit.position.x, hit.position.y, hit.position.z },
+            .normal = .{ hit.normal.x, hit.normal.y, hit.normal.z },
+        };
     }
 };
 
@@ -344,6 +402,16 @@ pub const MeshGL = opaque {
         const num_uints = self.getTriangleVertIndicesLength();
         const mem = try alloc.alloc(u32, num_uints);
         return c.manifold_meshgl_tri_verts(mem.ptr, @as(*c.ManifoldMeshGL, @ptrCast(self)))[0..num_uints];
+    }
+
+    pub fn getFaceIDsLength(self: *MeshGL) usize {
+        return c.manifold_meshgl_face_id_length(@as(*c.ManifoldMeshGL, @ptrCast(self)));
+    }
+
+    pub fn getFaceIDs(self: *MeshGL, alloc: Alloc) ![]u32 {
+        const num_ids = self.getFaceIDsLength();
+        const mem = try alloc.alloc(u32, num_ids);
+        return c.manifold_meshgl_face_id(mem.ptr, @as(*c.ManifoldMeshGL, @ptrCast(self)))[0..num_ids];
     }
 };
 
@@ -489,6 +557,21 @@ test "zmanifold.init" {
     try std.testing.expect(num_verts == 4);
 }
 
+test "zmanifold volume and MeshGL face IDs" {
+    const alloc = std.testing.allocator;
+    const cube = try Manifold.initCube(alloc, 2, 2, 2, true);
+    defer cube.deinit(alloc);
+    try std.testing.expectEqual(@as(f64, 8), cube.volume());
+    try std.testing.expectEqual(cube.volume(), cube.getVolume());
+
+    const mesh = try cube.getMeshGL(alloc);
+    defer mesh.deinit(alloc);
+    try std.testing.expectEqual(mesh.getNumTris(), mesh.getFaceIDsLength());
+    const face_ids = try mesh.getFaceIDs(alloc);
+    defer alloc.free(face_ids);
+    try std.testing.expectEqual(mesh.getNumTris(), face_ids.len);
+}
+
 test "opaque C++ storage remains aligned in an arena" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
@@ -503,6 +586,51 @@ test "opaque C++ storage remains aligned in an arena" {
     const mesh = try manifold.getMeshGL(alloc);
     defer mesh.deinit(alloc);
     try std.testing.expectEqual(@as(usize, 0), @intFromPtr(mesh) % opaque_alignment.toByteUnits());
+
+    _ = try alloc.alloc(u8, 7);
+    const hits = try manifold.rayCast(alloc, .{ -2, 0, 0 }, .{ 2, 0, 0 });
+    defer hits.deinit(alloc);
+    try std.testing.expectEqual(@as(usize, 0), @intFromPtr(hits) % opaque_alignment.toByteUnits());
+}
+
+test "zmanifold ray cast reports no hit for a miss" {
+    const alloc = std.testing.allocator;
+    const cube = try Manifold.initCube(alloc, 2, 2, 2, true);
+    defer cube.deinit(alloc);
+
+    const hits = try cube.rayCast(alloc, .{ 2, 2, -2 }, .{ 2, 2, 2 });
+    defer hits.deinit(alloc);
+    try std.testing.expectEqual(@as(usize, 0), hits.len());
+}
+
+test "zmanifold ray cast reports ordered cube entry and exit hits" {
+    const alloc = std.testing.allocator;
+    const cube = try Manifold.initCube(alloc, 2, 2, 2, true);
+    defer cube.deinit(alloc);
+
+    const hits = try cube.rayCast(alloc, .{ -2, 0, 0 }, .{ 2, 0, 0 });
+    defer hits.deinit(alloc);
+    try std.testing.expectEqual(@as(usize, 2), hits.len());
+
+    const entry = hits.get(0);
+    try std.testing.expectEqual(@as(f64, 0.25), entry.distance);
+    try std.testing.expectEqual([3]f64{ -1, 0, 0 }, entry.position);
+    try std.testing.expectEqual([3]f64{ -1, 0, 0 }, entry.normal);
+
+    const exit = hits.get(1);
+    try std.testing.expectEqual(@as(f64, 0.75), exit.distance);
+    try std.testing.expectEqual([3]f64{ 1, 0, 0 }, exit.position);
+    try std.testing.expectEqual([3]f64{ 1, 0, 0 }, exit.normal);
+}
+
+test "zmanifold ray cast returns no hit for a zero-length segment" {
+    const alloc = std.testing.allocator;
+    const cube = try Manifold.initCube(alloc, 2, 2, 2, true);
+    defer cube.deinit(alloc);
+
+    const hits = try cube.rayCast(alloc, .{ 0, 0, 0 }, .{ 0, 0, 0 });
+    defer hits.deinit(alloc);
+    try std.testing.expectEqual(@as(usize, 0), hits.len());
 }
 
 test "zmanifold.trim_tetrahedron" {
