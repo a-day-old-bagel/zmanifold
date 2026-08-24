@@ -207,6 +207,12 @@ pub const Manifold = opaque {
         return @as(*Manifold, @ptrCast(c.manifold_calculate_normals(mem.ptr, original, normal_idx, min_sharp_angle)));
     }
 
+    pub fn simplify(self: *Manifold, alloc: Alloc, tolerance: f64) !*Manifold {
+        const mem = try allocOpaque(alloc, c.manifold_manifold_size());
+        const original = @as(?*c.ManifoldManifold, @ptrCast(self));
+        return @as(*Manifold, @ptrCast(c.manifold_simplify(mem.ptr, original, tolerance)));
+    }
+
     pub fn getMeshGL(self: *Manifold, alloc: Alloc) !*MeshGL {
         const mem = try allocOpaque(alloc, c.manifold_meshgl_size());
         return @as(*MeshGL, @ptrCast(c.manifold_get_meshgl(mem.ptr, @as(?*c.ManifoldManifold, @ptrCast(self)))));
